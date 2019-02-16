@@ -1,0 +1,567 @@
+/*
+ * Copyright 2019 Peloton Blockchain Pty Ltd.
+ *
+ * All content in this document is owned, or licensed, by Peloton 
+ * Blockchain Pty Ltd. or its affiliates (‘Peloton’). Unauthorised
+ * use is prohibited without written permission of Peloton. While 
+ * reasonable efforts have been made to ensure that the contents of
+ * this document are accurate,the document is provided strictly “as
+ * is”, and no warranties of accuracy are given concerning the 
+ * contents of the information contained in this document, including
+ * any warranty that the document will be kept up to date. Peloton 
+ * reserves the right to change details in this document without notice.
+ * To the extent permitted by law no liability (including liability
+ * to any person by reason of negligence) will be accepted by Peloton
+ * or its employees for any direct or indirect loss or damage caused
+ * by omissions from or inaccuracies in this document.
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *                     ---------------------------
+ *
+ * This document describes the trading and information APIs for the
+ * Peloton Exchange system's Protofbuf Gateway.   If you prefer to
+ * connect via FIX, please get in touch separately for the FIX terms
+ * of engagement.
+ *
+ * Peloton Blockchain is NOT a market operator and does not provide
+ * a facility for trading.
+ *
+ * Peloton Blockchain makes the Peloton Exchange software available to
+ * market and ATS operators.  The Peloton Exchange software is a multi-
+ * currency, multi-board trading system designed to provide a trading
+ * platform for Security Tokens / Digitial Securities.  It includes a
+ * rich set of market operations and surveilance capabilities.
+ *
+ *                     ---------------------------
+ *
+ * If you would like to develop against an online test market, please
+ * contact us directly at https://pelotonblockchain.com.
+ */
+syntax = "proto3";
+
+package peloton;
+import "google/protobuf/empty.proto";
+option java_package = "com.peloton.exchange.gateway.api";
+option java_outer_classname = "PelotonExchangeProtos";
+
+
+
+/*------------------------------------------------------------------------*/
+/*							Gateway Service 							  */
+/*------------------------------------------------------------------------*/
+
+
+/*
+ * The Gateway service is available via a TLS connection only. To
+ * connect to a Gateway hosted by an exchange, you must arrange
+ * network connectivity to that exchange and request client certificates
+ * from the exchange.
+ */
+service Gateway {
+
+    /*
+	 * The login function must be called prior to any other call. Upon
+	 * authentication, the login function will return an access token.
+	 * This token must be included on all subsequent calls to other
+	 * functions.  The Gateway will throw an exception if a function call
+	 * is made without a valid access token.
+     */
+	rpc Login (LoginRequest) returns (LoginResponse) {}
+
+    /*
+	 * The logout function allows a participant to end their session.
+     */
+	rpc Logout (LogoutRequest) returns (google.protobuf.Empty) {}
+
+    /*
+	 * This function allows a new buy or sell Order to be placed into
+	 * the system.   The order will undergo pre-trade validation as
+	 * configured by the market operator, and if successful will be
+	 * placed into a price-time priority queue within the specific book
+	 * for the named board and pair.
+	 *
+	 * The returned GatewayResponse only indicates acknowledgement of
+	 * the new order instruction by the Exchange Gateway.  Further
+	 * updates on the pre-trade validation, order book status and
+	 * matching outcomes will be provided by ExecutionReports.
+	 *
+	 * Please request the Peloton Exchange API documentation guide
+	 * from your market operator for more information on placing
+	 * orders.
+     */
+	rpc PlaceNewOrder (OrderNew) returns (GatewayResponse) {} 
+
+	/*
+ 	 * This function allows for an outstanding order (that is, one
+ 	 * that has passed pre-trade validation but has not been fully
+ 	 * filled) to be cancelled.
+ 	 *
+ 	 * If the specified order has partially filled, then the only
+ 	 * outstanding amount will be cancelled.
+ 	 *
+	 * The returned GatewayResponse only indicates acknowledgement of
+	 * the cancel instruction by the Exchange Gateway.  Further
+	 * updates will be provided by ExecutionReports.
+	 *
+	 * Please request the Peloton Exchange API documentation guide
+	 * from your market operator for more information on cancelling
+	 * orders.
+	 */
+	rpc PlaceOrderCancel (OrderCancel) returns (GatewayResponse) {}
+
+	/*
+	 * This is a server-streaming function.  When the client lodges
+	 * a valid subscription, then all execution reports matching
+	 * the subscription will be returned back to the client as they
+	 * occur.
+	 *
+	 * The stream is not rate-limited.  If the client does not
+	 * consume ExecutionReports quickly enough then the Gateway may
+	 * halt the stream and require the client to reconnect.
+	 */
+	rpc SubscribeToExecutionReports (Subscription) returns (stream ExecutionReport) {}
+
+	/*
+	 * This function returns the full order book for a specified venue
+	 * and pair.  This can be used when re-connecting and re-building
+	 * an image of the order book.   Once complete, the order and trade
+	 * subscriptions can be used to keep the order book image up to date.
+	 */
+	rpc RequestOrderBook (Subscription) returns (OrderBook) {}
+
+	/*
+	 * The RequestVenues function returns a list of the venues (aka "boards")
+	 * curently available to the logged in participant.  The IDs of
+	 * each venue are required when placing orders or subscribing to
+	 * information streams.
+	 */
+	rpc RequestVenues (Subscription) returns (stream Venue) {}
+
+	/*
+	 * The RequestPairs function returns a list of the pairs curently
+	 * available to the logged in participant for a particular venue.
+	 * The IDs of each pair are required when placing orders.
+	 */
+	rpc RequestPairs (Subscription) returns (stream Pair) {}
+
+	/*
+	 * This is a server-streaming function.  When the client lodges
+	 * a valid subscription, then all orders on the specified venue
+	 * will be returned back to the client as they occur.
+	 *
+	 * The stream is not rate-limited.  If the client does not
+	 * consume orders quickly enough then the Gateway may
+	 * halt the stream and require the client to reconnect.
+	 */
+	rpc SubscribeToOrders (Subscription) returns (stream Order) {}
+
+	/*
+	 * This is a server-streaming function.  When the client lodges
+	 * a valid subscription, then all trades on the specified venue
+	 * will be returned back to the client as they occur.
+	 *
+	 * The stream is not rate-limited.  If the client does not
+	 * consume trades quickly enough then the Gateway may
+	 * halt the stream and require the client to reconnect.
+	 */
+	rpc SubscribeToTrades (Subscription) returns (stream Trade) {}
+
+	/*
+	 * This is a server-streaming function.  When the client lodges
+	 * a valid subscription, then all events relating to the specified
+	 * venue will be returned back to the client as they occur.
+	 *
+	 * The stream is not rate-limited.  If the client does not
+	 * consume venue events quickly enough then the Gateway may
+	 * halt the stream and require the client to reconnect.
+	 */
+	rpc SubscribeToVenues (Subscription) returns (stream VenueMessage) {}
+}
+
+
+
+/*------------------------------------------------------------------------*/
+/*							Data Objects 								  */
+/*------------------------------------------------------------------------*/
+
+
+/*
+ * This information will be provided by your market or ATS operator.
+ */
+message LoginRequest {
+	string userId = 1;
+	string password = 2;
+	int64 participantId = 3;
+}
+
+
+/*
+ * The login response carries the unique, temporary access token that
+ * identifies the client's current session.  This string must be included
+ * on each subsequent call to the Gateway.
+ *
+ * If the login fails, the error string will contain one of the following:
+ *
+ *  - "Participant does not match" - in case the userId provided does not match
+ *    the participantId provided
+ *
+ *  - "Login failed" - if the userId / password combination is invalid.
+ */
+message LoginResponse {
+	string token = 1;
+	string error = 2;
+}
+
+
+/*
+ * This request will reset the client's session.  If the same userId has
+ * been used to login to a web-based Trader UI session, then that session
+ * will also be invalidated.
+ */
+message LogoutRequest {
+	string userId = 1;
+	string token = 2;
+}
+
+
+/*
+ * OrderNew carries instructions to place new orders.
+ */
+message OrderNew {
+	// as returned by the LoginResponse
+	string token = 1;
+
+	// the Id of the logged in client
+	string userId = 2;
+
+	// the participant's own unique identifier for this order
+	string clientKey = 3;
+
+	// the ID for the intended board or venue
+	int64 venueId = 4;
+
+	// the logged in client's participantId
+	int64 participantId = 5;
+
+	// the unique Id of the underlying account on whose behalf the order is placed
+	string accountId = 6;
+
+	// the ID for the pair to be traded
+	int64 pairId = 7;
+
+	// the bid or ask price (to 5 decimal places), in the base product
+	double price = 8;
+
+	// the bid or ask price (to 5 decimal places), in the quoted product
+	double quantity = 9;
+
+	// whether this order is a bid or an ask.  TRUE if this is a buy.
+	bool isBuy = 10;
+
+	// whether this order is a limit order or a market order.  TRUE if this is a limit order.
+	bool isLimit = 11;
+
+	// If TRUE, the order will automatically cancel if it doesn't fill immediately.
+	// It will not be placed into a price-time priority queue.
+	bool isImmediateOrCancel = 12;
+
+	// If TRUE, the order will only match if the entire quantity can be filled.  If FALSE,
+	// thne partial fills are allowed for this order.
+	bool isAllOrNone = 13;
+}
+
+
+/*
+ * OrderCancel carries instructions to cancel an existing order.
+ */
+message OrderCancel {
+	// as returned by the LoginResponse
+	string token = 1;
+
+	// the Id of the logged in client
+	string userId = 2;
+
+	// the orderId returned by the GatewayResponse object in response to PlaceNewOrder
+	int64 orderId = 3;
+
+	// the client's own unique identifier for this cancel instruction
+	string clientKey = 4;
+}
+
+
+/*
+ * The GatewayResponse is returned by PlaceNewOrder and PlaceOrderCancel.
+ */
+message GatewayResponse {
+	// The unique ID of the newly placed order.
+	int64 orderId = 1;
+
+	// The client's own unique identifier for the instruction, for matching purposes.
+	string clientKey = 2;
+
+	// The following error codes may be returned in this field.  This will only be non-0 if status = 1.
+	//  0 - Means everything's OK
+	//  1 - A request was made to trade without authenticating the user.
+	//  2 - A request was made to trade on a non-existent venue.
+	//  3 - A request was made to trade on a non-public venue of which the participant is not a member
+	//  4 - A request was made to cancel an order that the system is not tracking
+	//  5 - A request was made to cancel an order by a participant other than the participant who placed the order
+	//  6 - A request was made to trade on a non-existent pair
+	//  7 - A request was made to trade a pair on a venue in which that pair is not available
+	//  8 - A request was made to trade on a venue that is either SUSPENDED or CLOSED
+	//  9 - A request was made to place an order with an invalid participant ID
+	//  10 - A request was made to place an order with an invalid trader ID or trader ID that doesn't match the given participant ID
+	//  11 - A request was made to place an order that included an order size greater than allowed for the participant
+	//  12 - A request was made to place an order with size smaller than the minimum allowed for at least one of the products in the pair
+	//  13 - A request was made to place an order with either quantity or price with greater precision than the minimum allowed for at least one of the products in the pair
+	//  14 - A request was made to place an order with a 0 or negative price.
+	//  15 - A request was made to place an order with a 0 or negative quantity.
+	//  16 - Although other parameters (venue, pair, trader) could all be resolved, no actual book was in memory that could manage the order or cancellation.
+	//  17 - A request was made to place an order without specifying an client key for the order.
+	int32 errorCode = 3;
+
+	// A status value returned by the Gateway will have one of the following values:
+	//  0 - instruction acknowledged
+	//  1 - instruction rejected
+	string status = 4;
+}
+
+
+/*
+ * A subscription carries the current client's information
+ * to support a new streaming subscription request.
+ */
+message Subscription {
+	// as returned by the LoginResponse
+	string token = 1;
+
+	// the Id of the logged in client
+	string userId = 2;
+
+	// in some functions, the venueId (as returned by
+	// RequestVenues) is required
+	int64 venueId = 3;
+}
+
+
+/*
+ * If subscribed, a stream of execution reports is returned for
+ * each order, trade and cancel placed by the current client.
+ */
+message ExecutionReport {
+	// orderId is always populated
+	int64 orderId = 1;
+	
+	// the traderId is only populated when type is a TRADE
+	int64 tradeId = 2;
+
+	// this enum indicates the type of event reflected by this report.
+	enum Type {
+		ORDER = 0;
+		CANCEL = 1;
+		TRADE = 2;
+	}
+	Type type = 3;
+	
+	// The errorCode is only populated for orders and cancels.
+	// The error code matches the definition of the error code
+	// in the GatewayResponse.
+	int32 errorCode = 6;
+	
+	// The orderStatus is only populated for orders and cancels.
+	// The status matches the definition of the status in the
+	// GatewayResponse.
+	string orderStatus = 7;
+}
+
+
+/*
+ * The RequestOrderBook function returns a list of orders and the
+ * timestamp at which the list was last current.
+ */
+message OrderBook {
+	// the current order book for the venue and pair specified in
+	// the request
+	repeated Order orders = 1;
+
+	// the time at which the list was last current, specified as a
+	// number of milliseconds since January 1, 1970, 00:00:00 GMT.
+	int64 timestamp = 2;
+}
+
+
+/*
+ * A venue message describes a venue or board in the exchange, upon
+ * which a number of pairs may be listed.
+ */
+message Venue {
+	// the unique ID for this venue
+	int64 venueId = 1;
+
+	// the display name for this venue or board
+	string name = 2;
+
+	// The time each day at which the venue is opened to accept orders.
+	// If the market is already open then no action is taken.  Stored
+	// as seconds of day, from 0 to ((24 * 60 * 60) - 1).
+	int64 openTime = 3;
+
+	// The time each day at which the venue is closed to new instructions.
+	// Stored as seconds of day, from 0 to ((24 * 60 * 60) - 1).
+	int64 closeTime = 4;
+
+	// The time each day at which the closing price is determined.
+	// Stored as seconds of day, from 0 to ((24 * 60 * 60) - 1).
+	int64 eodTime = 5;
+
+	// If this is TRUE, then the venue will not open on non-business days.
+	// Business days are defined by a calendar maintained by the market
+	// operator.  Contact your market operator for more information.
+	bool businessDaysOnly = 6;
+
+	// Venues or boards may be configured to not publish order or trade
+	// information.  If so, this flag will be FALSE.
+	bool publishingTickData = 7;
+
+	// If this is TRUE then published order and execution reports are blank
+	// so that participant's identities are hidden from other participants
+	bool anonymousVenue = 8;
+}
+
+
+/*
+ * A unique pair for trading.
+ */
+message Pair {
+	// The unique ID of the pair in the Exchange installation.
+	int64 pairId = 1;
+
+	// A display symbol or code for this pair.  The symbol will be of the
+	// form QUOTED:BASE
+	string symbol = 2;
+}
+
+
+/*
+ * The Order message is used to represent orders that have passed pre-trade
+ * validation and have been accepted into an book / price-time queue.
+ */
+message Order {
+	// The unique ID of the order.
+	int64 orderId = 1;
+
+	// The unique ID of venue or board into which the order was placed
+	int64 venueId = 2;
+
+	// the unique ID of the pair the order is buying/selling or cancelling
+	int64 pairId = 3;
+
+	// the bid or ask price (to 5 decimal places), in the base product
+	double price = 4;
+
+	// the bid or ask price (to 5 decimal places), in the quoted product
+	double quantity = 5;
+
+	// whether this order is a bid or an ask.  TRUE if this is a buy.
+	bool isBuy = 6;
+
+	// whether this order is a limit order or a market order.  TRUE if this is a limit order.
+	bool isLimit = 7;
+
+	// If TRUE, the order will automatically cancel if it doesn't fill immediately.
+	// It will not be placed into a price-time priority queue.
+	bool isImmediateOrCancel = 8;
+
+	// If TRUE, the order will only match if the entire quantity can be filled.  If FALSE,
+	// thne partial fills are allowed for this order.
+	bool isAllOrNone = 9;
+
+	// The precise time at which the order was accepted, specified as a
+	// number of milliseconds since January 1, 1970, 00:00:00 GMT.
+	int64 timeEntered = 10;
+
+	// The unique ID of the participant that placed this order.
+	// This will be blank for anonymous venues.
+	int64 participantId = 11;
+
+	// The status of the order.  In some cases, the same order will
+	// be reported a number of times, with only this field differing.
+	enum OrderStatus {
+		ACK = 0;
+		REJECTED = 1; 
+		QUEUED = 2;
+		PARTIALLY_FILLED = 3; 
+		FILLED = 4;
+		UPDATED = 5;
+		UPDATE_REJECTED = 6; 
+		CANCELLED = 7;
+		CANCEL_REJECTED = 8;
+	}
+	OrderStatus orderStatus = 12;
+}
+
+
+
+/*
+ * The Trade message is used to represent trades that have occurred.
+ * Two trades will be issued for each fill or cross between orders - one for each side.
+ */
+message Trade {
+	// The unique ID of the trade.
+	int64 tradeId = 1;
+
+	// The ID of the original order that led to this trade.
+	int64 orderId = 2;
+
+	// whether this order is a bid or an ask
+	string side = 3;
+
+	// The precise time at which the trade was executed, specified as a
+	// number of milliseconds since January 1, 1970, 00:00:00 GMT.
+	int64 timestamp = 4;
+
+	// the unique ID of the venue in which the trade was executed
+	int64 venueId = 5;
+
+	// the unique ID of the pair traded
+	int64 pairId = 6;
+
+	// the price agreed upon to 5 decimal places
+	double price = 7;
+
+	// the quantity agreed upon to 5 decimal places
+	double quantity = 8;
+}
+
+
+/*
+ * The VenueMessage is used to communicate any change in status of a Venue.
+ */
+message VenueMessage {
+	// The precise time at which the change in status occured, specified as a
+	// number of milliseconds since January 1, 1970, 00:00:00 GMT.
+	int64 timestamp = 1;
+
+	// the ID of the impacted venue
+	int64 venueId = 2;
+
+	// The kind of event that occured.
+	enum Event {
+		OPEN = 0;
+		CLOSE = 1;
+		EOD = 2;
+		PAIRS_CHANGED = 3;
+	}
+	Event event = 3;
+
+	// Any specific message to participant provided by the market operator
+	// in relation to this event.
+	string messageToParticipants = 4;
+}
+
+
